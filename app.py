@@ -121,8 +121,9 @@ if check_login():
                 
                 k1, k2 = st.columns(2)
                 k1.metric("Total Projected Loss", f"${final_df['Potential Loss ($)'].sum():,.2f}")
-                k2.metric("Avg Resilience", f"{final_df['Resilience Score'].mean()}%")
+                k2.metric("Avg Resilience", f"{final_df['Resilience Score'].mean():.1f}%")
                 
                 st.subheader("Analysis Results")
                 st.bar_chart(final_df.set_index('Supplier_ID')['Potential Loss ($)'])
                 st.dataframe(final_df)
+
