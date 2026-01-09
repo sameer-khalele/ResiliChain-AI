@@ -6,29 +6,27 @@ import plotly.graph_objects as go
 import os
 
 # ---------------------------------------------------------
-# 1. إعدادات الصفحة والتصميم
+# 1. إعدادات الصفحة
 # ---------------------------------------------------------
-st.set_page_config(page_title="ResiliChain AI | Enterprise v13", layout="wide")
+st.set_page_config(page_title="ResiliChain AI | Enterprise Commander", page_icon="🛡️", layout="wide")
 
 st.markdown("""
     <style>
-    .main { background-color: #f9fbfd; }
-    .metric-card { background-color: #ffffff; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 4px solid #0052cc; }
-    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
-    .stTabs [data-baseweb="tab"] { background-color: #f0f2f6; border-radius: 5px; padding: 10px 20px; font-weight: bold; }
-    .stTabs [aria-selected="true"] { background-color: #0052cc; color: white; }
+    .metric-card {background-color: #ffffff; border-left: 5px solid #0052cc; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);}
+    .scenario-active {background-color: #fff3cd; border: 1px solid #ffeeba; padding: 10px; border-radius: 5px; color: #856404;}
+    .reason-box {font-size: 0.9em; color: #555;}
     </style>
     """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 2. المترجم الذكي (Smart Mapper)
+# 2. المترجم الذكي & القالب
 # ---------------------------------------------------------
-def smart_mapper(df):
+def intelligent_mapper(df):
     df.columns = df.columns.astype(str).str.lower().str.strip()
     mapping = {
-        'price': 'price', 'cost': 'price', 'سعر': 'price', 'تكلفة': 'price',
-        'supplier': 'supplier', 'name': 'supplier', 'مورد': 'supplier',
-        'risk': 'risk_score', 'خطر': 'risk_score', 'score': 'risk_score'
+        'price': 'price', 'cost': 'price', 'unit_cost': 'price', 'سعر': 'price', 'تكلفة': 'price',
+        'supplier': 'supplier', 'vendor': 'supplier', 'name': 'supplier', 'مورد': 'supplier',
+        'risk': 'risk', 'score': 'risk', 'danger': 'risk', 'خطر': 'risk'
     }
     new_cols = {}
     for col in df.columns:
@@ -39,139 +37,221 @@ def smart_mapper(df):
         else: new_cols[col] = col
     return df.rename(columns=new_cols)
 
+def get_template_csv():
+    # نموذج قياسي ليحمله العميل
+    df = pd.DataFrame({
+        'Supplier_Name': ['Vendor A', 'Vendor B', 'Vendor C'],
+        'Unit_Cost': [100, 120, 90],
+        'Risk_Score_0_to_1': [0.1, 0.05, 0.4]
+    })
+    return df.to_csv(index=False).encode('utf-8')
+
 # ---------------------------------------------------------
-# 3. محرك الحسابات الدقيق
+# 3. محرك السيناريوهات والقيود (The Core Logic)
 # ---------------------------------------------------------
-def run_precision_engine(df, total_demand, strategy, max_cap):
+def run_enterprise_engine(df, total_demand, strategy, max_cap, risk_surge, price_surge, excluded_suppliers):
     results = []
     
-    # موازنة الاستراتيجية (كلما زادت زاد الاهتمام بالتوفير)
-    p_weight = 0.4 + (strategy / 100)
-    r_weight = 1.6 - (strategy / 100)
+    # تحويل استراتيجية المستخدم (0-100) إلى أوزان رياضية
+    # Strategy 0 = Safety (Risk Weight High), 100 = Cost (Price Weight High)
+    p_weight = 0.5 + (strategy / 100)
+    r_weight = 1.5 - (strategy / 100)
     
     for index, row in df.iterrows():
-        name = str(row.get('supplier', f'Vendor-{index}'))
-        price = float(row.get('price', 100))
+        supplier = str(row.get('supplier', f'Sup-{index}'))
         
-        # حساب الخطر (التأكد من أنه بين 0 و 1)
-        raw_risk = float(row.get('risk_score', 0.5))
-        risk = max(0.01, min(raw_risk if raw_risk <= 1.0 else raw_risk/100, 0.99))
+        # 1️⃣ تطبيق السيناريوهات (What-If Analysis)
+        base_price = float(row.get('price', 50))
+        base_risk = float(row.get('risk', 0.5))
         
-        # الصمود (Resilience) = عكس الخطر
-        resilience = (1 - risk) * 100
+        # تعديل الأسعار والمخاطر بناءً على السيناريو
+        simulated_price = base_price * (1 + price_surge/100)
+        simulated_risk = base_risk * (1 + risk_surge/100)
+        simulated_risk = max(0.01, min(simulated_risk, 0.99)) # تثبيت الخطر بين 1% و 99%
         
-        # الجاذبية الرياضية (Optimization Formula)
-        attraction = (1 / (price ** p_weight)) * (1 / (risk ** r_weight))
+        # التحقق من الاستبعاد (Supplier Unavailable Scenario)
+        is_excluded = supplier in excluded_suppliers
         
+        # حساب الجاذبية (Attractiveness Score)
+        if is_excluded:
+            attraction = 0
+            reason = "⛔ Excluded by Scenario"
+        else:
+            attraction = (1 / (simulated_price ** p_weight)) * (1 / (simulated_risk ** r_weight))
+            reason = "✅ Active"
+
         results.append({
-            'Supplier': name,
-            'Unit Price': price,
-            'Risk Factor': risk,
-            'Resilience %': round(resilience, 1),
-            'Attraction': attraction
+            'Supplier': supplier,
+            'Base Price': base_price,
+            'Simulated Price': round(simulated_price, 2),
+            'Simulated Risk': round(simulated_risk, 2),
+            'Resilience %': round((1 - simulated_risk) * 100, 1),
+            'Attraction': attraction,
+            'Status Note': reason
         })
     
     res_df = pd.DataFrame(results)
     
-    # تحويل الجاذبية إلى نسب مئوية مع احترام القيد (Max Cap)
+    # 2️⃣ تطبيق القيود (Constraints Logic)
     total_attr = res_df['Attraction'].sum()
-    res_df['Raw_Split'] = res_df['Attractiveness' if 'Attractiveness' in res_df else 'Attraction'] / total_attr
     
-    # تطبيق القيد (Constraint)
-    res_df['Final_Split'] = res_df['Raw_Split'].clip(upper=max_cap/100)
+    if total_attr == 0:
+        res_df['Allocated %'] = 0
+    else:
+        res_df['Raw_Split'] = res_df['Attraction'] / total_attr
+        
+        # تطبيق الحد الأقصى (Max Cap) وإعادة توزيع الفائض
+        # نقوم بعملية التوزيع على مرحلتين لضمان الدقة
+        res_df['Allocated %'] = res_df['Raw_Split'].clip(upper=max_cap/100)
+        
+        # حساب الفائض
+        remainder = 1.0 - res_df['Allocated %'].sum()
+        
+        # توزيع الفائض على الموردين الذين لم يصلوا للحد الأقصى (وغير مستبعدين)
+        if remainder > 0.001:
+            eligible = (res_df['Allocated %'] < (max_cap/100)) & (res_df['Attraction'] > 0)
+            if eligible.any():
+                # نوزع الفائض بالتناسب
+                res_df.loc[eligible, 'Allocated %'] += remainder * (res_df.loc[eligible, 'Allocated %'] / res_df.loc[eligible, 'Allocated %'].sum())
+                # تأكيد أخير للقيد
+                res_df['Allocated %'] = res_df['Allocated %'].clip(upper=max_cap/100)
+
+    # حساب الكميات النهائية
+    res_df['Order Qty'] = (res_df['Allocated %'] * total_demand).astype(int)
+    res_df['Total Cost'] = res_df['Order Qty'] * res_df['Simulated Price']
     
-    # إعادة توزيع الفائض
-    diff = 1.0 - res_df['Final_Split'].sum()
-    if diff > 0:
-        non_capped = res_df['Final_Split'] < (max_cap/100)
-        if non_capped.any():
-            res_df.loc[non_capped, 'Final_Split'] += diff / non_capped.sum()
-            
-    res_df['Order Qty'] = (res_df['Final_Split'] * total_demand).astype(int)
-    res_df['Total Cost'] = res_df['Order Qty'] * res_df['Unit Price']
+    # 3️⃣ التبرير العميق (Why Not?)
+    # نضيف عمود يشرح لماذا حصل هذا المورد على هذه النسبة
+    def explain_logic(row):
+        if row['Status Note'].startswith("⛔"):
+            return "Forcefully excluded by user scenario."
+        if row['Allocated %'] >= (max_cap/100 - 0.01):
+            return f"⚠️ Capped at {max_cap}% constraint limit (Could have taken more)."
+        if row['Allocated %'] < 0.05:
+            if row['Simulated Price'] > res_df['Simulated Price'].mean():
+                return f"📉 Share limited due to High Price (+${row['Simulated Price'] - res_df['Simulated Price'].mean():.0f} vs avg)."
+            if row['Simulated Risk'] > res_df['Simulated Risk'].mean():
+                return "📉 Share limited due to High Risk instability."
+        return "✅ Balanced allocation based on strategy."
+
+    res_df['AI Reasoning'] = res_df.apply(explain_logic, axis=1)
     
     return res_df
 
 # ---------------------------------------------------------
-# 4. واجهة المستخدم (The Dashboard)
+# 4. واجهة التطبيق
 # ---------------------------------------------------------
+SUBSCRIBERS_DB = {"admin": "admin2026", "demo": "demo123"}
+
 if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
 
 if not st.session_state["authenticated"]:
-    st.title("🛡️ ResiliChain AI: Strategic Login")
-    user = st.text_input("Username")
-    pwd = st.text_input("Password", type="password")
-    if st.button("Login"):
-        if user == "admin" and pwd == "admin2026":
-            st.session_state["authenticated"] = True
-            st.rerun()
+    st.title("🔒 ResiliChain AI: Enterprise Login")
+    c1, c2, c3 = st.columns([1,2,1])
+    with c2:
+        user = st.text_input("Username")
+        pwd = st.text_input("Password", type="password")
+        if st.button("Login"):
+            if user in SUBSCRIBERS_DB and SUBSCRIBERS_DB[user] == pwd:
+                st.session_state["authenticated"] = True
+                st.rerun()
 else:
+    # --- Sidebar ---
     with st.sidebar:
         if os.path.exists("logo.png"): st.image("logo.png", width=200)
         else: st.title("ResiliChain AI")
         
-        st.markdown("### ⚙️ Optimization Settings")
-        max_alloc = st.slider("Max Allocation per Supplier (%)", 10, 100, 40)
-        strategy = st.slider("Strategy (Safety vs Cost):", 0, 100, 30, help="0=Safe, 100=Cheap")
-        total_vol = st.number_input("Total Order Volume:", value=10000)
+        st.markdown("### 📥 Step 1: Data Standard")
+        st.download_button("Download Excel Template", get_template_csv(), "resilichain_template.csv", help="Use this file for best accuracy.")
+        uploaded_file = st.file_uploader("Upload Data", type=['xlsx', 'csv'])
         
         st.markdown("---")
-        uploaded_file = st.file_uploader("📂 Upload Data", type=['xlsx', 'csv'])
-        if st.button("Logout"):
+        st.markdown("### ⚙️ Step 2: Constraints")
+        max_alloc = st.slider("Max Cap per Supplier (%)", 10, 100, 40, help="No single supplier gets more than this.")
+        strategy = st.slider("Strategy:", 0, 100, 30, help="0=Safety First, 100=Cost First")
+        
+        st.markdown("---")
+        st.markdown("### 🌪️ Step 3: What-If Scenario")
+        st.caption("Simulate market disruptions:")
+        risk_surge = st.slider("Global Risk Surge (%)", 0, 100, 0)
+        price_surge = st.slider("Price Inflation (%)", 0, 50, 0)
+        
+        # القائمة المنسدلة لاستبعاد موردين تظهر فقط بعد تحميل البيانات
+        exclude_list = []
+        if uploaded_file:
+             # قراءة سريعة فقط لجلب الأسماء للقائمة
+             try:
+                 temp_df = intelligent_mapper(pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file))
+                 exclude_list = st.multiselect("Simulate Supplier Failure:", temp_df['supplier'].unique())
+             except: pass
+
+        if st.button("Logout"): 
             st.session_state["authenticated"] = False
             st.rerun()
 
-    st.title("🛡️ Enterprise Risk & Decision Dashboard")
-
+    # --- Main Dashboard ---
+    st.title("🛡️ Supply Chain Command Center")
+    
     if uploaded_file:
-        raw_df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
-        df = smart_mapper(raw_df)
+        df = intelligent_mapper(pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file))
         
-        if st.button("🚀 Execute Strategic Analysis", type="primary"):
-            final_df = run_precision_engine(df, total_vol, strategy, max_alloc)
+        # تشغيل المحرك مع السيناريوهات
+        final_df = run_enterprise_engine(df, 10000, strategy, max_alloc, risk_surge, price_surge, exclude_list)
+        
+        # تنبيه إذا كان هناك سيناريو نشط
+        if risk_surge > 0 or price_surge > 0 or exclude_list:
+            st.markdown(f"""
+            <div class="scenario-active">
+                ⚠️ <b>Active Scenario Simulation:</b> Risk +{risk_surge}% | Price +{price_surge}% | Excluded: {len(exclude_list)}
+            </div>
+            """, unsafe_allow_html=True)
             
-            # --- الـ KPIs العلوية ---
-            k1, k2, k3 = st.columns(3)
-            with k1: st.markdown(f'<div class="metric-card"><h4>Total Cost</h4><h2>${final_df["Total Cost"].sum():,.0f}</h2></div>', unsafe_allow_html=True)
-            with k2: st.markdown(f'<div class="metric-card"><h4>Avg Resilience</h4><h2>{final_df["Resilience %"].mean():.1f}%</h2></div>', unsafe_allow_html=True)
-            with k3: st.markdown(f'<div class="metric-card"><h4>Critical Points</h4><h2>{len(final_df[final_df["Resilience %"] < 40])}</h2></div>', unsafe_allow_html=True)
-
-            st.markdown("---")
-
-            # --- التبويبات (Tabs) لترتيب الشكل ---
-            tab1, tab2, tab3 = st.tabs(["📊 Risk Matrix", "🧠 AI Strategy", "📋 Raw Data"])
-
-            with tab1:
-                col1, col2 = st.columns([2, 1])
-                with col1:
-                    # Bubble Chart (الرسمة الأهم)
-                    fig = px.scatter(final_df, x="Resilience %", y="Unit Price", size="Order Qty", 
-                                     color="Resilience %", color_continuous_scale="RdYlGn",
-                                     hover_name="Supplier", title="Supplier Strategic Map (Size = Order Volume)",
-                                     labels={'Resilience %': 'Reliability Score', 'Unit Price': 'Cost Per Unit'})
-                    st.plotly_chart(fig, use_container_width=True)
-                    st.caption("💡 **Interpretation:** Top-Right is Safe but Expensive. Bottom-Right is the 'Golden Spot' (Safe & Cheap).")
-                with col2:
-                    # Radar/Bar Chart للتنويع
-                    fig_bar = px.bar(final_df, x='Final_Split', y='Supplier', orientation='h', color='Resilience %',
-                                     title="Volume Distribution %", color_continuous_scale="RdYlGn")
-                    st.plotly_chart(fig_bar, use_container_width=True)
-
-            with tab2:
-                # تبرير القرار
-                best = final_df.loc[final_df['Final_Split'].idxmax()]
-                st.info(f"🤖 **Decision Logic:** System prioritized **{best['Supplier']}** with **{best['Final_Split']:.1%}** of the total volume.")
+        # --- تبويبات النتائج ---
+        tab1, tab2, tab3 = st.tabs(["🧠 AI Optimization", "🌪️ Scenario Impact", "📋 Explainable Data"])
+        
+        with tab1:
+            st.subheader("Optimized Allocation")
+            c1, c2 = st.columns([1, 1])
+            with c1:
+                fig = px.pie(final_df, values='Order Qty', names='Supplier', hole=0.5, 
+                             title="Suggested Split", color_discrete_sequence=px.colors.sequential.RdBu)
+                st.plotly_chart(fig, use_container_width=True)
+            with c2:
+                # عرض أفضل مورد مع السبب
+                winner = final_df.loc[final_df['Allocated %'].idxmax()]
+                st.success(f"🏆 **Winner:** {winner['Supplier']} ({winner['Allocated %']:.1%})")
+                st.info(f"💡 **Why?** {winner['AI Reasoning']}")
                 
-                c1, c2 = st.columns(2)
-                with c1:
-                    fig_pie = px.pie(final_df, values='Final_Split', names='Supplier', hole=0.4, title="Order Quantity Split")
-                    st.plotly_chart(fig_pie, use_container_width=True)
-                with c2:
-                    st.subheader("Allocation Plan")
-                    st.dataframe(final_df[['Supplier', 'Unit Price', 'Resilience %', 'Final_Split', 'Order Qty']]
-                                 .style.format({'Final_Split': '{:.1%}', 'Unit Price': '${:.1f}'}))
+                # عرض من تم تقييدهم
+                capped = final_df[final_df['AI Reasoning'].str.contains("Capped")]
+                if not capped.empty:
+                    st.warning(f"⚠️ **Constraint Applied:** {len(capped)} supplier(s) hit the {max_alloc}% limit.")
 
-            with tab3:
-                st.dataframe(final_df)
+        with tab2:
+            st.subheader("Scenario vs Baseline Analysis")
+            # مقارنة سريعة
+            total_cost = final_df['Total Cost'].sum()
+            avg_risk = final_df['Simulated Risk'].mean() * 100
+            
+            k1, k2, k3 = st.columns(3)
+            k1.metric("Projected Cost", f"${total_cost:,.0f}", delta=f"{price_surge}% Inflation", delta_color="inverse")
+            k2.metric("Network Risk", f"{avg_risk:.1f}%", delta=f"{risk_surge}% Surge", delta_color="inverse")
+            k3.metric("Active Suppliers", len(final_df[final_df['Allocated %'] > 0]), delta=f"-{len(exclude_list)} Unavailable")
+            
+            # Bubble Chart مع التأثير
+            
+            fig_bub = px.scatter(final_df, x="Simulated Risk", y="Simulated Price", size="Order Qty", color="Supplier",
+                                 title="Scenario Risk Map (Size = Allocation)", hover_data=['AI Reasoning'])
+            st.plotly_chart(fig_bub, use_container_width=True)
+
+        with tab3:
+            st.subheader("Deep Explainability Report")
+            # جدول تفاعلي يشرح الأسباب
+            st.dataframe(
+                final_df[['Supplier', 'Allocated %', 'Simulated Price', 'Simulated Risk', 'AI Reasoning']]
+                .style.format({'Allocated %': '{:.1%}', 'Simulated Price': '${:.1f}', 'Simulated Risk': '{:.2f}'})
+                .applymap(lambda v: 'color: red;' if 'Excluded' in str(v) else ('color: orange;' if 'Capped' in str(v) else ''), subset=['AI Reasoning'])
+            )
+            
     else:
-        st.info("👈 Please upload your supplier Excel file to begin the analysis.")
+        st.info("👈 Start by downloading the Template, filling it, and uploading it.")
